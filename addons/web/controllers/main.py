@@ -534,14 +534,15 @@ class Home(http.Controller):
     @http.route([
         '/web/css/<xmlid>',
         '/web/css/<xmlid>/<version>',
+        '/web/css.<int:page>/<xmlid>/<version>',
     ], type='http', auth='public')
-    def css_bundle(self, xmlid, version=None, **kw):
+    def css_bundle(self, xmlid, version=None, page=None, **kw):
         try:
             bundle = AssetsBundle(xmlid)
         except QWebTemplateNotFound:
             return request.not_found()
 
-        response = request.make_response(bundle.css(), [('Content-Type', 'text/css')])
+        response = request.make_response(bundle.css(page), [('Content-Type', 'text/css')])
         return make_conditional(response, bundle.last_modified, max_age=BUNDLE_MAXAGE)
 
 class WebClient(http.Controller):
@@ -921,20 +922,6 @@ class DataSet(http.Controller):
         return self._call_kw(model, method, args, {})
 
     def _call_kw(self, model, method, args, kwargs):
-        # Temporary implements future display_name special field for model#read()
-        if method in ('read', 'search_read') and kwargs.get('context', {}).get('future_display_name'):
-            if 'display_name' in args[1]:
-                if method == 'read':
-                    names = dict(request.session.model(model).name_get(args[0], **kwargs))
-                else:
-                    names = dict(request.session.model(model).name_search('', args[0], **kwargs))
-                args[1].remove('display_name')
-                records = getattr(request.session.model(model), method)(*args, **kwargs)
-                for record in records:
-                    record['display_name'] = \
-                        names.get(record['id']) or "{0}#{1}".format(model, (record['id']))
-                return records
-
         if method.startswith('_'):
             raise Exception("Access Denied: Underscore prefixed methods cannot be remotely called")
 
@@ -1091,10 +1078,14 @@ class Binary(http.Controller):
         Model = request.registry[model]
         cr, uid, context = request.cr, request.uid, request.context
         fields = [field]
+        content_type = 'application/octet-stream'
         if filename_field:
             fields.append(filename_field)
         if id:
+            fields.append('file_type')
             res = Model.read(cr, uid, [int(id)], fields, context)[0]
+            if res.get('file_type'):
+                content_type = res['file_type']
         else:
             res = Model.default_get(cr, uid, fields, context)
         filecontent = base64.b64decode(res.get(field) or '')
@@ -1104,9 +1095,10 @@ class Binary(http.Controller):
             filename = '%s_%s' % (model.replace('.', '_'), id)
             if filename_field:
                 filename = res.get(filename_field, '') or filename
-            return request.make_response(filecontent,
-                [('Content-Type', 'application/octet-stream'),
-                 ('Content-Disposition', content_disposition(filename))])
+            return request.make_response(
+                filecontent, [('Content-Type', content_type),
+                              ('Content-Disposition',
+                               content_disposition(filename))])
 
     @http.route('/web/binary/saveas_ajax', type='http', auth="public")
     @serialize_exception
@@ -1118,6 +1110,7 @@ class Binary(http.Controller):
         id = jdata.get('id', None)
         filename_field = jdata.get('filename_field', None)
         context = jdata.get('context', {})
+        content_type = 'application/octet-stream'
 
         Model = request.session.model(model)
         fields = [field]
@@ -1126,7 +1119,10 @@ class Binary(http.Controller):
         if data:
             res = {field: data, filename_field: jdata.get('filename', None)}
         elif id:
+            fields.append('file_type')
             res = Model.read([int(id)], fields, context)[0]
+            if res.get('file_type'):
+                content_type = res['file_type']
         else:
             res = Model.default_get(fields, context)
         filecontent = base64.b64decode(res.get(field) or '')
@@ -1137,9 +1133,10 @@ class Binary(http.Controller):
             filename = '%s_%s' % (model.replace('.', '_'), id)
             if filename_field:
                 filename = res.get(filename_field, '') or filename
-            return request.make_response(filecontent,
-                headers=[('Content-Type', 'application/octet-stream'),
-                        ('Content-Disposition', content_disposition(filename))],
+            return request.make_response(
+                filecontent, headers=[('Content-Type', content_type),
+                                      ('Content-Disposition',
+                                       content_disposition(filename))],
                 cookies={'fileToken': token})
 
     @http.route('/web/binary/upload', type='http', auth="user")
@@ -1240,7 +1237,7 @@ class Action(http.Controller):
             except Exception:
                 action_id = 0   # force failed read
 
-        base_action = Actions.read([action_id], ['name', 'type'], request.context)
+        base_action = Actions.read([action_id], ['type'], request.context)
         if base_action:
             ctx = request.context
             action_type = base_action[0]['type']
@@ -1250,7 +1247,7 @@ class Action(http.Controller):
                 ctx.update(additional_context)
             action = request.session.model(action_type).read([action_id], False, ctx)
             if action:
-                value = clean_action(dict(action[0], **base_action[0]))
+                value = clean_action(action[0])
         return value
 
     @http.route('/web/action/run', type='json', auth="user")
@@ -1437,6 +1434,9 @@ class ExportFormat(object):
         Model = request.session.model(model)
         context = dict(request.context or {}, **params.get('context', {}))
         ids = ids or Model.search(domain, 0, False, False, context)
+
+        if not request.env[model]._is_an_ordinary_table():
+            fields = [field for field in fields if field['name'] != 'id']
 
         field_names = map(operator.itemgetter('name'), fields)
         import_data = Model.export_data(ids, field_names, self.raw_data, context=context).get('datas',[])
