@@ -790,7 +790,7 @@ class stock_picking(osv.osv):
         'name': fields.char('Reference', select=True, states={'done': [('readonly', True)], 'cancel': [('readonly', True)]}, copy=False),
         'origin': fields.char('Source Document', states={'done': [('readonly', True)], 'cancel': [('readonly', True)]}, help="Reference of the document", select=True),
         'backorder_id': fields.many2one('stock.picking', 'Back Order of', states={'done': [('readonly', True)], 'cancel': [('readonly', True)]}, help="If this shipment was split, then this field links to the shipment which contains the already processed part.", select=True, copy=False),
-        'note': fields.text('Notes', states={'done': [('readonly', True)], 'cancel': [('readonly', True)]}),
+        'note': fields.text('Notes'),
         'move_type': fields.selection([('direct', 'Partial'), ('one', 'All at once')], 'Delivery Method', required=True, states={'done': [('readonly', True)], 'cancel': [('readonly', True)]}, help="It specifies goods to be deliver partially or all at once"),
         'state': fields.function(_state_get, type="selection", copy=False,
             store={
@@ -1163,7 +1163,7 @@ class stock_picking(osv.osv):
             picking_quants = []
             #Calculate packages, reserved quants, qtys of this picking's moves
             for move in picking.move_lines:
-                if move.state not in ('assigned', 'confirmed'):
+                if move.state not in ('assigned', 'confirmed', 'waiting'):
                     continue
                 move_quants = move.reserved_quant_ids
                 picking_quants += move_quants
@@ -1824,6 +1824,13 @@ class stock_move(osv.osv):
     def _default_destination_address(self, cr, uid, context=None):
         return False
 
+    def _default_group_id(self, cr, uid, context=None):
+        context = context or {}
+        if context.get('default_picking_id', False):
+            picking = self.pool.get('stock.picking').browse(cr, uid, context['default_picking_id'], context=context)
+            return picking.group_id.id
+        return False
+
     _defaults = {
         'location_id': _default_location_source,
         'location_dest_id': _default_location_destination,
@@ -1838,6 +1845,7 @@ class stock_move(osv.osv):
         'procure_method': 'make_to_stock',
         'propagate': True,
         'partially_available': False,
+        'group_id': _default_group_id,
     }
 
     def _check_uom(self, cr, uid, ids, context=None):
@@ -2558,6 +2566,8 @@ class stock_move(osv.osv):
             code = 'incoming'
         return code
 
+    def _get_taxes(self, cr, uid, move, context=None):
+        return []
 
 class stock_inventory(osv.osv):
     _name = "stock.inventory"
@@ -2747,6 +2757,36 @@ class stock_inventory(osv.osv):
             vals.append(product_line)
         return vals
 
+    def _check_filter_product(self, cr, uid, ids, context=None):
+        for inventory in self.browse(cr, uid, ids, context=context):
+            if inventory.filter == 'none' and inventory.product_id and inventory.location_id and inventory.lot_id:
+                return True
+            if inventory.filter not in ('product', 'product_owner') and inventory.product_id:
+                return False
+            if inventory.filter != 'lot' and inventory.lot_id:
+                return False
+            if inventory.filter not in ('owner', 'product_owner') and inventory.partner_id:
+                return False
+            if inventory.filter != 'pack' and inventory.package_id:
+                return False
+        return True
+
+    def onchange_filter(self, cr, uid, ids, filter, context=None):
+        to_clean = { 'value': {} }
+        if filter not in ('product', 'product_owner'):
+            to_clean['value']['product_id'] = False
+        if filter != 'lot':
+            to_clean['value']['lot_id'] = False
+        if filter not in ('owner', 'product_owner'):
+            to_clean['value']['partner_id'] = False
+        if filter != 'pack':
+            to_clean['value']['package_id'] = False
+        return to_clean
+
+    _constraints = [
+        (_check_filter_product, 'The selected inventory options are not coherent.',
+            ['filter', 'product_id', 'lot_id', 'partner_id', 'package_id']),
+    ]
 
 class stock_inventory_line(osv.osv):
     _name = "stock.inventory.line"
@@ -2805,6 +2845,7 @@ class stock_inventory_line(osv.osv):
 
     _defaults = {
         'product_qty': 0,
+        'product_uom_id': lambda self, cr, uid, ctx=None: self.pool['ir.model.data'].get_object_reference(cr, uid, 'product', 'product_uom_unit')[1]
     }
 
     def _get_quants(self, cr, uid, line, context=None):
