@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: Odoo 8.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2015-01-21 14:09+0000\n"
-"PO-Revision-Date: 2015-11-11 04:28+0000\n"
+"PO-Revision-Date: 2015-12-28 19:17+0000\n"
 "Last-Translator: Martin Trigaux\n"
 "Language-Team: Spanish (Ecuador) (http://www.transifex.com/odoo/odoo-8/language/es_EC/)\n"
 "MIME-Version: 1.0\n"
@@ -21,7 +21,7 @@ msgstr ""
 #: code:addons/fleet/fleet.py:387
 #, python-format
 msgid "%s %s has been added to the fleet!"
-msgstr ""
+msgstr "¡%s %s han sido añadidos al flete!"
 
 #. module: fleet
 #: code:addons/fleet/fleet.py:663
@@ -379,7 +379,7 @@ msgstr ""
 #. module: fleet
 #: field:fleet.vehicle,color:0
 msgid "Color"
-msgstr ""
+msgstr "Color"
 
 #. module: fleet
 #: help:fleet.vehicle,color:0
@@ -580,7 +580,7 @@ msgstr ""
 #. module: fleet
 #: selection:fleet.vehicle.log.contract,cost_frequency:0
 msgid "Daily"
-msgstr ""
+msgstr "Diario"
 
 #. module: fleet
 #: field:fleet.vehicle.cost,date:0 field:fleet.vehicle.odometer,date:0
@@ -1045,7 +1045,7 @@ msgstr ""
 #. module: fleet
 #: model:fleet.service.type,name:fleet.type_service_service_11
 msgid "Management Fee"
-msgstr ""
+msgstr "Comisión por Administración"
 
 #. module: fleet
 #: model:res.groups,name:fleet.group_fleet_manager
@@ -1818,7 +1818,7 @@ msgstr ""
 #: view:fleet.vehicle.model:fleet.fleet_vehicle_model_form
 #: field:fleet.vehicle.model,vendors:0
 msgid "Vendors"
-msgstr ""
+msgstr "Proveedores"
 
 #. module: fleet
 #: field:fleet.vehicle.log.contract,days_left:0
