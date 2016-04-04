@@ -314,7 +314,7 @@ class sale_order(osv.osv):
     def get_salenote(self, cr, uid, ids, partner_id, context=None):
         if context is None:
             context = {}
-        context_lang = context.copy() 
+        context_lang = context.copy()
         if partner_id:
             partner_lang = self.pool.get('res.partner').browse(cr, uid, partner_id, context=context).lang
             context_lang.update({'lang': partner_lang})
