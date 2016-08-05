@@ -69,7 +69,13 @@ class ir_translation_import_cursor(object):
 
         # Note that Postgres will NOT inherit the constraints or indexes
         # of ir_translation, so this copy will be much faster.
+        # Thanks to the explicit default value for 'id' overriding,
+        # it will not bump the sequence either
+        # (id is actually unsused in the temp table).
+        # This will be faster, and avoid the possibility to hit the limit
+        # at 2**31 in months (fatal startup error)
         cr.execute('''CREATE TEMP TABLE %s(
+            id INT DEFAULT 0,
             imd_model VARCHAR(64),
             imd_name VARCHAR(128)
             ) INHERITS (%s) ''' % (self._table_name, self._parent_table))
